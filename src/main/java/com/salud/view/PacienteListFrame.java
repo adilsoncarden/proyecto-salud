@@ -5,85 +5,52 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
-import java.awt.GridBagConstraints;
 
-/**
- * Pantalla con tabla de pacientes registrados.
- */
 public class PacienteListFrame extends JFrame {
 
-    private JTable tablaPacientes;
-    private DefaultTableModel tableModel;
-    private JButton btnVolver;
+    private final JTextField txtBuscar = new JTextField(20);
+    private final DefaultTableModel modelo = new DefaultTableModel(
+            new String[] { "ID", "DNI", "Nombre", "Apellido", "Teléfono", "Seguro" }, 0) {
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
+    };
+    private final JTable tabla = new JTable(modelo);
+    private final JButton btnBuscar = new JButton("Buscar");
+    private final JButton btnEditar = new JButton("Editar");
+    private final JButton btnDesactivar = new JButton("Desactivar");
+    private final JButton btnHistoria = new JButton("Ver Historia");
+    private final JButton btnVolver = new JButton("Volver");
 
     public PacienteListFrame() {
-        initComponents();
-    }
-
-    private void initComponents() {
-        setTitle("Centro de Salud - Lista de Pacientes");
+        setTitle("Pacientes");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        UIStyles.configurarVentana(this, 900, 580);
+        setSize(700, 400);
+        setLocationRelativeTo(null);
 
-        JPanel root = UIStyles.crearRootPanel();
-        root.add(UIStyles.crearEncabezado(
-                "Pacientes Registrados",
-                "Listado completo de pacientes en el sistema"), BorderLayout.NORTH);
+        JPanel top = new JPanel();
+        top.add(new javax.swing.JLabel("Buscar:"));
+        top.add(txtBuscar);
+        top.add(btnBuscar);
+        top.add(btnEditar);
+        top.add(btnDesactivar);
+        top.add(btnHistoria);
+        top.add(btnVolver);
 
-        JPanel tarjeta = UIStyles.crearTarjeta();
-        GridBagConstraints gbc = UIStyles.crearConstraintsFormulario();
-
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.gridwidth = 2;
-        tarjeta.add(UIStyles.crearTituloSeccion("Listado de Pacientes"), gbc);
-        gbc.gridy = 1;
-        tarjeta.add(UIStyles.crearSubtituloSeccion("Consulte la información registrada de cada paciente"), gbc);
-
-        gbc.gridy = 2;
-        gbc.gridwidth = 2;
-        gbc.insets = new java.awt.Insets(4, 0, 16, 0);
-        tarjeta.add(UIStyles.crearSeparador(), gbc);
-
-        String[] columnas = { "ID", "DNI", "Nombre", "Apellido", "Teléfono" };
-        tableModel = new DefaultTableModel(columnas, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-
-        tablaPacientes = new JTable(tableModel);
-        UIStyles.estilizarTabla(tablaPacientes);
-
-        JScrollPane scrollPane = new JScrollPane(tablaPacientes);
-        UIStyles.estilizarScrollTabla(scrollPane);
-        scrollPane.setPreferredSize(new java.awt.Dimension(780, 300));
-
-        btnVolver = UIStyles.crearBotonOutline("Volver al menú");
-
-        gbc.gridy = 3;
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.weighty = 1;
-        tarjeta.add(scrollPane, gbc);
-
-        gbc.gridy = 4;
-        gbc.weighty = 0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new java.awt.Insets(20, 0, 0, 0);
-        tarjeta.add(UIStyles.crearPanelAcciones(btnVolver), gbc);
-
-        root.add(UIStyles.centrarContenido(tarjeta), BorderLayout.CENTER);
-        setContentPane(root);
+        add(top, BorderLayout.NORTH);
+        add(new JScrollPane(tabla), BorderLayout.CENTER);
     }
 
-    public DefaultTableModel getTableModel() {
-        return tableModel;
-    }
-
-    public JButton getBtnVolver() {
-        return btnVolver;
-    }
+    public JTextField getTxtBuscar() { return txtBuscar; }
+    public DefaultTableModel getModelo() { return modelo; }
+    public JTable getTabla() { return tabla; }
+    public JButton getBtnBuscar() { return btnBuscar; }
+    public JButton getBtnEditar() { return btnEditar; }
+    public JButton getBtnDesactivar() { return btnDesactivar; }
+    public JButton getBtnHistoria() { return btnHistoria; }
+    public JButton getBtnVolver() { return btnVolver; }
 }

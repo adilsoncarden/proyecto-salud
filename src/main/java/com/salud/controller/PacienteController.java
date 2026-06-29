@@ -1,165 +1,181 @@
 package com.salud.controller;
 
+import com.salud.dao.HistoriaClinicaDAO;
 import com.salud.dao.PacienteDAO;
 import com.salud.model.Paciente;
-import com.salud.view.PacienteForm;
+import com.salud.view.HistoriaClinicaFrame;
+import com.salud.view.MenuFrame;
+import com.salud.view.PacienteFormFrame;
 import com.salud.view.PacienteListFrame;
-import com.salud.view.UIStyles;
 
 import javax.swing.JOptionPane;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.table.DefaultTableModel;
-import java.util.List;
+import java.sql.Date;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
-/**
- * Controlador del módulo de pacientes.
- */
 public class PacienteController {
 
-    private final PacienteDAO pacienteDAO;
+    private final PacienteDAO pacienteDAO = new PacienteDAO();
+    private final HistoriaClinicaDAO historiaClinicaDAO = new HistoriaClinicaDAO();
 
-    public PacienteController() {
-        this.pacienteDAO = new PacienteDAO();
+    public void abrirRegistro() {
+        PacienteFormFrame frame = new PacienteFormFrame("Registrar Paciente", null);
+        frame.getBtnGuardar().addActionListener(e -> guardarNuevo(frame));
+        frame.getBtnCancelar().addActionListener(e -> volverMenu(frame));
+        frame.setVisible(true);
     }
 
-    /**
-     * Configura el formulario de registro de pacientes.
-     */
-    public void configurarFormulario(PacienteForm form) {
-        form.getBtnGuardar().setEnabled(false);
-        form.getBtnGuardar().addActionListener(e -> guardarPaciente(form));
-        form.getBtnVolver().addActionListener(e -> {
-            form.dispose();
-            new com.salud.view.MenuFrame().setVisible(true);
-        });
-
-        DocumentListener listener = new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-                actualizarEstadoBoton(form);
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-                actualizarEstadoBoton(form);
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-                actualizarEstadoBoton(form);
-            }
-        };
-
-        form.getTxtDni().getDocument().addDocumentListener(listener);
-        form.getTxtNombre().getDocument().addDocumentListener(listener);
-        form.getTxtApellido().getDocument().addDocumentListener(listener);
-        form.getTxtTelefono().getDocument().addDocumentListener(listener);
-
-        javax.swing.SwingUtilities.invokeLater(() -> form.getTxtDni().requestFocusInWindow());
+    public void abrirListado() {
+        PacienteListFrame frame = new PacienteListFrame();
+        configurarListado(frame);
+        frame.setVisible(true);
     }
 
-    private void actualizarEstadoBoton(PacienteForm form) {
-        boolean valido = ValidacionHelper.esPacienteValido(
-                obtenerDni(form),
-                obtenerNombre(form),
-                obtenerApellido(form),
-                obtenerTelefono(form));
-        form.getBtnGuardar().setEnabled(valido);
+    public void configurarListado(PacienteListFrame frame) {
+        recargarTabla(frame, null);
+
+        frame.getBtnBuscar().addActionListener(e ->
+                recargarTabla(frame, frame.getTxtBuscar().getText()));
+
+        frame.getBtnEditar().addActionListener(e -> editarSeleccionado(frame));
+
+        frame.getBtnDesactivar().addActionListener(e -> desactivarSeleccionado(frame));
+
+        frame.getBtnHistoria().addActionListener(e -> verHistoria(frame));
+
+        frame.getBtnVolver().addActionListener(e -> volverMenu(frame));
     }
 
-    private void guardarPaciente(PacienteForm form) {
-        String dni = obtenerDni(form);
-        String nombre = obtenerNombre(form);
-        String apellido = obtenerApellido(form);
-        String telefono = obtenerTelefono(form);
-
-        String error = ValidacionHelper.validarPaciente(dni, nombre, apellido, telefono);
+    private void guardarNuevo(PacienteFormFrame frame) {
+        Paciente paciente = leerFormulario(frame);
+        String error = ValidacionHelper.validarPaciente(
+                paciente.getDni(), paciente.getNombre(), paciente.getApellido(),
+                paciente.getTelefono(), textoFecha(frame), paciente.getTipoSeguro());
         if (error != null) {
-            JOptionPane.showMessageDialog(form,
-                    error,
-                    "Datos inválidos",
-                    JOptionPane.ERROR_MESSAGE);
-            form.getBtnGuardar().setEnabled(false);
+            JOptionPane.showMessageDialog(frame, error, "Validación", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (pacienteDAO.existeDni(paciente.getDni(), null)) {
+            JOptionPane.showMessageDialog(frame, "El DNI ya está registrado.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (pacienteDAO.insertar(paciente)) {
+            int idPaciente = pacienteDAO.buscarPorDni(paciente.getDni()).getId();
+            historiaClinicaDAO.crearSiNoExiste(idPaciente);
+            JOptionPane.showMessageDialog(frame, "Paciente registrado correctamente.");
+            frame.dispose();
+            new MenuFrame().setVisible(true);
+        } else {
+            JOptionPane.showMessageDialog(frame, "No se pudo registrar el paciente.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void editarSeleccionado(PacienteListFrame frame) {
+        int fila = frame.getTabla().getSelectedRow();
+        if (fila < 0) {
+            JOptionPane.showMessageDialog(frame, "Seleccione un paciente.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int id = (int) frame.getModelo().getValueAt(fila, 0);
+        Paciente paciente = pacienteDAO.buscarPorId(id);
+        if (paciente == null) {
             return;
         }
 
-        Paciente paciente = new Paciente(dni, nombre, apellido, telefono);
-        boolean guardado = pacienteDAO.insertar(paciente);
+        PacienteFormFrame form = new PacienteFormFrame("Editar Paciente", paciente);
+        form.getBtnGuardar().addActionListener(e -> {
+            Paciente actualizado = leerFormulario(form);
+            actualizado.setId(paciente.getId());
+            String error = ValidacionHelper.validarPaciente(
+                    actualizado.getDni(), actualizado.getNombre(), actualizado.getApellido(),
+                    actualizado.getTelefono(), textoFecha(form), actualizado.getTipoSeguro());
+            if (error != null) {
+                JOptionPane.showMessageDialog(form, error, "Validación", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (pacienteDAO.existeDni(actualizado.getDni(), actualizado.getId())) {
+                JOptionPane.showMessageDialog(form, "El DNI ya existe.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            if (pacienteDAO.actualizar(actualizado)) {
+                JOptionPane.showMessageDialog(form, "Paciente actualizado.");
+                form.dispose();
+                recargarTabla(frame, frame.getTxtBuscar().getText());
+            } else {
+                JOptionPane.showMessageDialog(form, "No se pudo actualizar.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        form.getBtnCancelar().addActionListener(e -> form.dispose());
+        form.setVisible(true);
+    }
 
-        if (guardado) {
-            JOptionPane.showMessageDialog(form,
-                    "Paciente registrado correctamente.",
-                    "Confirmación",
-                    JOptionPane.INFORMATION_MESSAGE);
-            limpiarFormulario(form);
-            form.getTxtDni().requestFocusInWindow();
-        } else {
-            JOptionPane.showMessageDialog(form,
-                    "No se pudo registrar el paciente. Verifique que el DNI no esté duplicado.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
+    private void desactivarSeleccionado(PacienteListFrame frame) {
+        int fila = frame.getTabla().getSelectedRow();
+        if (fila < 0) {
+            JOptionPane.showMessageDialog(frame, "Seleccione un paciente.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(frame,
+                "¿Confirma desactivar este paciente?",
+                "Confirmar",
+                JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+        int id = (int) frame.getModelo().getValueAt(fila, 0);
+        if (pacienteDAO.desactivar(id)) {
+            JOptionPane.showMessageDialog(frame, "Paciente desactivado.");
+            recargarTabla(frame, frame.getTxtBuscar().getText());
         }
     }
 
-    private String obtenerDni(PacienteForm form) {
-        return UIStyles.obtenerTexto(form.getTxtDni(), PacienteForm.PLACEHOLDER_DNI);
+    private void verHistoria(PacienteListFrame frame) {
+        int fila = frame.getTabla().getSelectedRow();
+        if (fila < 0) {
+            JOptionPane.showMessageDialog(frame, "Seleccione un paciente.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int id = (int) frame.getModelo().getValueAt(fila, 0);
+        new HistoriaClinicaController().abrirHistoria(id);
     }
 
-    private String obtenerNombre(PacienteForm form) {
-        return UIStyles.obtenerTexto(form.getTxtNombre(), PacienteForm.PLACEHOLDER_NOMBRE);
-    }
-
-    private String obtenerApellido(PacienteForm form) {
-        return UIStyles.obtenerTexto(form.getTxtApellido(), PacienteForm.PLACEHOLDER_APELLIDO);
-    }
-
-    private String obtenerTelefono(PacienteForm form) {
-        return UIStyles.obtenerTexto(form.getTxtTelefono(), PacienteForm.PLACEHOLDER_TELEFONO);
-    }
-
-    private void limpiarFormulario(PacienteForm form) {
-        restaurarPlaceholder(form.getTxtDni(), PacienteForm.PLACEHOLDER_DNI);
-        restaurarPlaceholder(form.getTxtNombre(), PacienteForm.PLACEHOLDER_NOMBRE);
-        restaurarPlaceholder(form.getTxtApellido(), PacienteForm.PLACEHOLDER_APELLIDO);
-        restaurarPlaceholder(form.getTxtTelefono(), PacienteForm.PLACEHOLDER_TELEFONO);
-        form.getBtnGuardar().setEnabled(false);
-    }
-
-    private void restaurarPlaceholder(javax.swing.JTextField campo, String placeholder) {
-        campo.setForeground(UIStyles.COLOR_PLACEHOLDER);
-        campo.setText(placeholder);
-    }
-
-    /**
-     * Carga los pacientes en la tabla de la vista de listado.
-     */
-    public void cargarLista(PacienteListFrame frame) {
-        List<Paciente> pacientes = pacienteDAO.listar();
-        DefaultTableModel model = frame.getTableModel();
-
-        model.setRowCount(0);
-
-        for (Paciente p : pacientes) {
-            model.addRow(new Object[] {
-                    p.getId(),
-                    p.getDni(),
-                    p.getNombre(),
-                    p.getApellido(),
-                    p.getTelefono() != null ? p.getTelefono() : ""
+    public void recargarTabla(PacienteListFrame frame, String filtro) {
+        frame.getModelo().setRowCount(0);
+        for (Paciente p : pacienteDAO.buscarPorTexto(filtro)) {
+            frame.getModelo().addRow(new Object[] {
+                    p.getId(), p.getDni(), p.getNombre(), p.getApellido(),
+                    p.getTelefono() != null ? p.getTelefono() : "",
+                    p.getTipoSeguro() != null ? p.getTipoSeguro() : ""
             });
         }
+    }
 
-        if (pacientes.isEmpty()) {
-            JOptionPane.showMessageDialog(frame,
-                    "No hay pacientes registrados todavía.",
-                    "Información",
-                    JOptionPane.INFORMATION_MESSAGE);
+    private Paciente leerFormulario(PacienteFormFrame frame) {
+        Paciente p = new Paciente();
+        p.setDni(frame.getTxtDni().getText().trim());
+        p.setNombre(frame.getTxtNombre().getText().trim());
+        p.setApellido(frame.getTxtApellido().getText().trim());
+        p.setTelefono(frame.getTxtTelefono().getText().trim());
+        p.setDireccion(frame.getTxtDireccion().getText().trim());
+        p.setTipoSeguro((String) frame.getCmbSeguro().getSelectedItem());
+        String fecha = frame.getTxtFechaNacimiento().getText().trim();
+        if (!fecha.isEmpty()) {
+            p.setFechaNacimiento(Date.valueOf(LocalDate.parse(fecha, DateTimeFormatter.ISO_LOCAL_DATE)));
         }
+        return p;
+    }
 
-        frame.getBtnVolver().addActionListener(e -> {
-            frame.dispose();
-            new com.salud.view.MenuFrame().setVisible(true);
-        });
+    private String textoFecha(PacienteFormFrame frame) {
+        return frame.getTxtFechaNacimiento().getText().trim();
+    }
+
+    private void volverMenu(PacienteFormFrame frame) {
+        frame.dispose();
+        new MenuFrame().setVisible(true);
+    }
+
+    private void volverMenu(PacienteListFrame frame) {
+        frame.dispose();
+        new MenuFrame().setVisible(true);
     }
 }
