@@ -1,0 +1,6 @@
+# Copie este archivo como 'config.properties' en la raíz del proyecto
+# y complete sus credenciales locales de MySQL.
+
+db.url=
+db.user=
+db.password=
