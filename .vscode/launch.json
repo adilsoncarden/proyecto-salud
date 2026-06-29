@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Main",
+            "request": "launch",
+            "mainClass": "com.salud.Main",
+            "projectName": "ProyectoSalud_6c80e34d"
+        },
+        {
+            "type": "java",
+            "name": "Sistema Salud - Main",
+            "request": "launch",
+            "mainClass": "com.salud.Main",
+            "projectName": "ProyectoSalud"
+        }
+    ]
+}
